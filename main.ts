@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -29,13 +29,13 @@ interface VirusTotalReport {
 function validateConfig() {
   const requiredVars = ['VIRUSTOTAL_API_KEY', 'FILE_PATH'];
   const missingVars = requiredVars.filter(
-    (varName) => !process.env[varName] || process.env[varName]?.trim() === ''
+    varName => !process.env[varName] || process.env[varName]?.trim() === ''
   );
 
   if (missingVars.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missingVars.join(', ')}. ` +
-      `Please check your .env file at: ${envPath}`
+      `Check your .env file at: ${envPath}`
     );
   }
 }
@@ -46,37 +46,71 @@ async function getFileHash(
 ): Promise<string> {
   try {
     console.log(`🔍 Calculating ${algorithm} hash for: ${filePath}`);
-    const command = `certutil -hashfile "${filePath}" ${algorithm}`;
-    const { stdout } = await execAsync(command, { encoding: 'utf8', timeout: 60000 });
     
-    const lines = stdout.split(/\r?\n/);
-    const hashLine = lines.find(line => 
-      line.trim() !== '' && 
-      !line.includes('hash') && 
-      !line.includes('certutil')
-    );
-
-    if (!hashLine) {
-      throw new Error('Could not find hash in certutil output');
+    const safePath = filePath.replace(/"/g, '');
+    const command = `certutil -hashfile "${safePath}" ${algorithm}`;
+    
+    console.log(`⚙️ Running command: ${command}`);
+    
+    const { stdout, stderr } = await execAsync(command, { 
+      encoding: 'utf8',
+      timeout: 60000
+    });
+    
+    if (stderr) {
+      console.warn(`⚠️ certutil stderr: ${stderr}`);
     }
-
-    const hash = hashLine
-      .trim()
+    
+    console.log(`📋 certutil output:\n${stdout}`);
+    
+    const lines = stdout.split(/\r?\n/).map(line => line.trim());
+    const hashLines = lines.filter(line => 
+      line && 
+      !line.toLowerCase().includes('hash') && 
+      !line.toLowerCase().includes('certutil') &&
+      line.length > 10
+    );
+    
+    if (hashLines.length === 0) {
+      throw new Error('No valid hash line found in certutil output');
+    }
+    
+    let hash = hashLines[0]
       .replace(/[^a-fA-F0-9]/g, '')
       .toLowerCase();
-
+    
+    console.log(`🔧 Raw hash extracted: "${hashLines[0]}" → cleaned: "${hash}"`);
+    
     const expectedLength = algorithm === 'MD5' ? 32 : 64;
+    
+    if (hash.length < expectedLength && lines.length > 2) {
+      console.log('🔍 Searching for hash in additional lines...');
+      for (let i = 1; i < lines.length; i++) {
+        const candidate = lines[i].replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+        if (candidate.length >= expectedLength - 5) {
+          hash = candidate;
+          console.log(`✅ Found potential hash in line ${i + 1}: "${hash}"`);
+          break;
+        }
+      }
+    }
+    
     if (hash.length !== expectedLength) {
       throw new Error(
-        `Invalid ${algorithm} hash length. Expected ${expectedLength}, got ${hash.length}`
+        `Invalid ${algorithm} hash length. Expected ${expectedLength}, got ${hash.length}. ` +
+        `Raw output was: "${hashLines[0]}"`
       );
     }
-
+    
     return hash;
   } catch (error) {
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : String(error);
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+    
     throw new Error(`Hash calculation failed: ${errorMessage}`);
   }
 }
@@ -113,9 +147,10 @@ async function checkVirusTotal(
       );
     }
     
-    const errorMessage = error instanceof Error
-      ? error.message
-      : String(error);
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
     
     throw new Error(`⚡ Unexpected error: ${errorMessage}`);
   }
@@ -126,21 +161,33 @@ export async function analyzeFile(): Promise<void> {
     validateConfig();
 
     const apiKey = process.env.VIRUSTOTAL_API_KEY!;
-    const filePath = process.env.FILE_PATH!.replace(/\\\\/g, '\\');
+    const filePath = process.env.FILE_PATH!
+      .replace(/\\\\/g, '\\')
+      .replace(/^"|"$/g, '');
     const algorithm = (process.env.HASH_ALGORITHM as 'MD5' | 'SHA256') || 'SHA256';
 
-
-    console.log(`📂 File path: ${filePath}`);
+    console.log(`📂 Cleaned file path: ${filePath}`);
     
+    try {
+      const { stdout } = await execAsync(`powershell -Command "Test-Path '${filePath}'"`, {
+        timeout: 5000
+      });
+      if (!stdout.trim().toLowerCase().includes('true')) {
+        console.warn('⚡ File existence check failed - continuing anyway (path might be valid)');
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not verify file existence:', e instanceof Error ? e.message : String(e));
+    }
+
     const hash = await getFileHash(filePath, algorithm);
-    console.log(`✅ Hash calculated: ${hash}`);
+    console.log(`✅ Final hash: ${hash}`);
 
     const report = await checkVirusTotal(hash, apiKey);
 
     const stats = report.data.attributes.last_analysis_stats;
     const cleanEngines = stats.harmless + stats.undetected;
     const totalEngines = Object.values(stats).reduce((a, b) => a + b, 0);
-    const threatPercentage = Math.round((stats.malicious / totalEngines) * 100);
+    const threatPercentage = totalEngines > 0 ? Math.round((stats.malicious / totalEngines) * 100) : 0;
 
     console.log('\n' + '='.repeat(50));
     console.log('🛡️  VIRUSTOTAL ANALYSIS REPORT');
@@ -167,14 +214,21 @@ export async function analyzeFile(): Promise<void> {
     
     console.log('='.repeat(50));
   } catch (error) {
-    const errorMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? (error as any).message
-        : String(error);
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+      errorMessage = (error as any).message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
     
     console.error(`\n🔥 CRITICAL ERROR: ${errorMessage}`);
     console.error(`🔧 Check your configuration in: ${envPath}`);
+    console.error(`📄 Current .env content:`);
+    console.error(`VIRUSTOTAL_API_KEY=${process.env.VIRUSTOTAL_API_KEY ? '***HIDDEN***' : 'MISSING'}`);
+    console.error(`FILE_PATH=${process.env.FILE_PATH}`);
+    console.error(`HASH_ALGORITHM=${process.env.HASH_ALGORITHM || 'SHA256'}`);
     process.exitCode = 1;
   }
 }
