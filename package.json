@@ -1,0 +1,19 @@
+{
+  "name": "virustotal-analyzer",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "ts-node main.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "@types/axios": "^0.14.0",
+    "@types/node": "^20.19.26",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.2"
+  }
+}
