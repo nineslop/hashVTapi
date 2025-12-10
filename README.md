@@ -7,14 +7,14 @@ Analyze files for viruses via VirusTotal API with automatic hash calculation via
 ## Start
 
 powershell
-#### 1. Установите зависимости
+#### 1. Install dependencies
 `npm install axios dotenv`<br>
 `npm install -D typescript ts-node @types/node`
 
-#### 2. Создайте .env файл
+#### 2. Create a .env file
 `copy .env.example .env`
 
-#### 3. Запустите анализ
+#### 3. Run analysis
 `npx ts-node main.ts`
 
 ## Requirements
