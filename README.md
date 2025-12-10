@@ -6,7 +6,6 @@ Analyze files for viruses via VirusTotal API with automatic hash calculation via
 
 ## Start
 
-powershell
 #### 1. Install dependencies
 `npm install axios dotenv`<br>
 `npm install -D typescript ts-node @types/node`
@@ -69,18 +68,18 @@ HASH_ALGORITHM=SHA256
 ```
 
 ## Important notes
-API limits
+#### API limits
 
     Free account: 4 requests per minute, 500 per day
     If the limit is exceeded: Error 429 Too Many Requests
 
-Safety
+#### Safety
 
     An API key gives you access to your data in VirusTotal.
     Use a separate key for each project.
     Change the key regularly in VirusTotal settings.
 
-Restrictions
+#### Restrictions
 
     Only works on Windows due to a dependency on certutil
     Does not support files larger than 4GB (VirusTotal API limitation)
