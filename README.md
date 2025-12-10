@@ -84,7 +84,7 @@ HASH_ALGORITHM=SHA256
     Only works on Windows due to a dependency on certutil
     Does not support files larger than 4GB (VirusTotal API limitation)
 
-Useful commands
+## Useful commands
 
 #### Check Node.js version
 `node -v`
