@@ -4,7 +4,6 @@ import axios, { AxiosError } from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Загружаем переменные окружения из .env файла
 const envPath = path.resolve(__dirname, '.env');
 dotenv.config({ path: envPath });
 
@@ -27,7 +26,6 @@ interface VirusTotalReport {
   data: VirusTotalData;
 }
 
-// Валидация конфигурации
 function validateConfig() {
   const requiredVars = ['VIRUSTOTAL_API_KEY', 'FILE_PATH'];
   const missingVars = requiredVars.filter(
