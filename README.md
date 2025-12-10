@@ -24,8 +24,8 @@ VirusTotal API key ([VirusTotalAPI](https://www.virustotal.com/gui/my-apikey?spm
 
 Setting up the .env file
 ```.env
-VIRUSTOTAL_API_KEY=ваш_ключ_virustotal
-FILE_PATH="Z:\\путь\\к\\файлу.exe"
+VIRUSTOTAL_API_KEY=your_key_virustotal
+FILE_PATH="Z:\\path\\to\\file.exe"
 HASH_ALGORITHM=SHA256
 ```
 
